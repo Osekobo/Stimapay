@@ -1,13 +1,14 @@
 {
-  "name": "ussd-data-bundle-simulator",
+  "name": "stimapay",
   "version": "1.0.0",
-  "description": "Africa's Talking Sandbox USSD data bundle simulator with simulated activation; no M-PESA/Daraja integration.",
+  "description": "StimaPay - USSD prepaid power token payment via M-PESA.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.3",
     "express": "^5.2.1",
     "mqtt": "^5.16.0"
   }

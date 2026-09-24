@@ -1,0 +1,36 @@
+node --env-file=.env server.js
+1425883901
+9988776655
+Daraja ──HTTPS──> ngrok ──HTTP──> localhost:3000 ──> stimapay container
+# Build the image and start the container
+docker compose up --build
+docker images
+# Or in the background
+docker compose up -d  (g)
+docker compose up --build -d
+docker compose ps
+
+
+
+# start (builds if needed)
+docker compose up -d
+
+# rebuild after code changes
+docker compose up --build -d
+
+# watch logs
+docker compose logs -f stimapay
+
+# restart after .env changes
+docker compose restart stimapay
+
+# stop (keeps DB)
+docker compose down
+
+# stop and wipe DB (fresh start)
+docker compose down -v
+
+
+
+docker compose up --build -d
+docker compose up --build -d

@@ -1,66 +1,102 @@
-# EasyTel USSD Bundle Simulator
+# StimaPay
 
-A Node.js and Express application that simulates a USSD data bundle purchasing flow for a fictional telecom provider called EasyTel. It is designed to run against the Africa's Talking Sandbox feature phone simulator and uses SQLite for storage. This is a demo project only.
+StimaPay is a Node.js and Express application that lets a feature phone user buy
+prepaid KPLC power tokens over USSD and pay with M-PESA. The user dials `*384#`,
+registers their meter number, enters an amount, and approves an M-PESA STK Push
+prompt. Payment results are reconciled via the Daraja (M-PESA) API and recorded
+in SQLite.
 
 ## What this project does
 
-The application lets a feature phone user dial `*123#` and navigate a USSD menu to buy a data bundle. Because this is a sandbox demo, the entire purchase is simulated inside the application. There is no M-PESA integration, no Daraja API, no payment gateway, and no secret keys anywhere in this codebase.
+A user dials `*384#` and is greeted with the StimaPay prepaid power menu. The
+first time they use it, they register their KPLC meter number. After that they
+can:
 
-A purchase is considered complete the moment the user confirms it. The server records the transaction, an activation, and a fake SMS receipt in the SQLite database, then returns the final USSD screen.
+1. Buy a token by entering an amount in Kenya Shillings.
+2. Change their registered meter number.
+
+When the user confirms a purchase, the server triggers a Daraja STK Push to
+their phone. They enter their M-PESA PIN and the transaction is authorised by
+Safaricom. A callback updates the payment record, and a background reconcile
+runs 45 seconds later to settle anything the callback missed.
 
 ## USSD flow
 
 The complete menu users see on their phone:
 
-1. Buy Data Bundle
-   1. 100MB for KSh 10
-   2. 500MB for KSh 50
-   3. 1GB for KSh 99
-   4. 2GB for KSh 180
-      1. Confirm purchase
-      2. Cancel
-2. My Data Balance
-3. Last Purchase
+```
+Welcome to StimaPay Prepaid Power
+Enter your KPLC meter number:
+```
 
-The quick test path is to dial `1`, then `3`, then `1`, which selects the 1GB bundle, confirms the purchase, and completes the simulated activation.
+Once registered:
+
+```
+StimaPay Prepaid Power
+Meter: 99999999999
+1. Buy Token
+2. Change Meter Number
+```
+
+Buying a token is a three-step path: `1` for the menu, then the amount (for
+example `1*500`), then `1*500*1` to confirm. Confirming triggers the M-PESA
+prompt instead of completing instantly, because the money moves for real.
 
 ## Project structure
 
-`server.js` contains the Express server, the USSD callback handler, and the local test API endpoints. `db.js` opens the SQLite database, creates the tables, and seeds the bundle catalogue. `public/index.html` is a browser based test console for trying the USSD flow without a real phone. `telecom.db` is the SQLite database file created at runtime.
+`server.js` contains the Express server, the USSD callback handler, the M-PESA
+callback, and the local test API endpoints. `db.js` opens the SQLite database
+and creates the tables. `mpesa.js` wraps the Daraja STK Push and query APIs.
+`public/index.html` is a browser-based test console for trying the USSD flow
+without a phone. `stimapay.db` is the SQLite database file created at runtime.
 
 ## How the USSD callback works
 
-Africa's Talking sends a POST request to `http://YOUR_PUBLIC_URL/ussd` every time the user presses a key. The request body contains these fields: `sessionId`, `serviceCode`, `phoneNumber`, and `text`.
+Your USSD aggregator sends a POST request to `http://YOUR_PUBLIC_URL/ussd`
+every time the user presses a key. The request body contains the fields
+`sessionId`, `serviceCode`, `phoneNumber`, and `text`.
 
-The `text` field is the important one. It holds the complete menu path the user has entered, with each menu level separated by an asterisk. For example, `1*3*1` means the user selected menu option 1, then bundle 3, then confirmed with option 1.
+The `text` field holds the complete menu path the user has entered, with each
+menu level separated by an asterisk. For example, `1*500*1` means: open the Buy
+Token menu, enter 500, and confirm. The application splits `text` on the
+asterisk and uses the resulting parts to decide what to show next.
 
-The application splits `text` on the asterisk and uses the resulting parts to decide what to show next. When there are no parts, it shows the main menu. One part of `1` shows the bundle list. Two parts show a confirmation screen. Three parts perform the simulated activation and return the final screen.
-
-The server must always answer with plain text that starts with `CON` to continue the session or `END` to finish it. Any other format is rejected by the USSD network.
+The server must always answer with plain text that starts with `CON` to continue
+the session or `END` to finish it. Any other format is rejected by the USSD
+network.
 
 ## Server endpoints
 
-`POST /ussd` is the Africa's Talking callback. It receives the USSD webhook and replies with the `CON` or `END` text response.
+`POST /ussd` is the USSD callback aggregator. It receives the webhook and
+replies with a `CON` or `END` text response.
 
-`POST /api/ussd-test` is a local browser endpoint that calls the same handler and returns JSON, used by the test console.
+`POST /mpesa/callback` is the Daraja STK Push callback. Safaricom POSTs the
+transaction result here and the server updates the payment status.
 
-`GET /api/bundles` returns the bundle catalogue.
-
-`GET /api/transactions` returns the 30 most recent purchases with their receipt codes.
-
-`GET /api/sms` returns the 30 most recent simulated SMS receipts.
+`GET /api/payments` returns the 30 most recent payments with their status and
+M-PESA receipt numbers.
 
 ## Database schema
 
-`bundles` stores the available data bundles with their name, data allowance in megabytes, and price.
+`users` stores each phone number and its registered meter number.
 
-`transactions` stores each purchase with the phone number, bundle, amount, a generated receipt code, and status.
+`payments` stores each transaction: phone, meter number, amount, the Daraja
+checkout request ID, the M-PESA receipt number, result code and description, and
+the payment status (PENDING, PAID, CANCELLED, TIMEOUT, or FAILED).
 
-`activations` stores the simulated activation of a bundle for a phone number.
+Tables are created on first run and start empty.
 
-`sms_receipts` stores the simulated SMS confirmation message sent after a purchase.
+## Configuration
 
-The bundles table is seeded on first run with the four default bundles. The other tables start empty.
+`server.js` uses environment variables. `PORT` defaults to 3000. `mpesa.js`
+reads the Daraja credentials and endpoints from environment variables (see
+`mpesa.js` for the full list, or the `.env` file):
+
+- `MPESA_ENV` — `sandbox` (default) or `production`
+- `MPESA_CONSUMER_KEY` and `MPESA_CONSUMER_SECRET` — Daraja app credentials
+- `MPESA_SHORTCODE` — paybill shortcode
+- `MPESA_PASSKEY` — used with the shortcode to build the STK password
+- `MPESA_CALLBACK_URL` — public URL that receives the STK callback
 
 ## Run locally
 
@@ -76,7 +112,8 @@ Start the server:
 npm start
 ```
 
-The server listens on port 3000 by default. You can override it with the `PORT` environment variable.
+The server listens on port 3000 by default. You can override it with the `PORT`
+environment variable.
 
 Open the local test console:
 
@@ -84,18 +121,19 @@ Open the local test console:
 http://localhost:3000
 ```
 
-## Africa's Talking Sandbox setup
+## Testing the STK Push locally
 
-The Africa's Talking Sandbox requires that your application is reachable from the public internet. Localhost alone is not reachable by their servers. Expose port 3000 using a public HTTPS tunnel such as ngrok, or deploy the application to a public server.
-
-In the Africa's Talking Sandbox dashboard, create a USSD channel and set its callback URL to:
+The STK Push and callback require your server to be reachable from the public
+internet. Localhost alone is not reachable by Safaricom. Expose port 3000 using
+a public HTTPS tunnel such as ngrok, and set `MPESA_CALLBACK_URL` to something
+like:
 
 ```bash
-https://YOUR_PUBLIC_URL/ussd
+https://YOUR_PUBLIC_URL/mpesa/callback
 ```
-
-Then open the Africa's Talking Simulator and test the channel using its feature phone interface.
 
 ## Security notes
 
-This project contains no credentials, API keys, payment callbacks, or real money movement. You do not need an Africa's Talking API key to run the USSD callback, because the application only receives the USSD webhook from the Sandbox and returns the text response. Keep any Africa's Talking dashboard credentials out of the repository and out of any source files.
+Keep the Daraja consumer key, consumer secret, and passkey out of version control
+and any public source files. `.env` is gitignored, and never process real transactions without first verifying the credential
+values and the M-PESA environment before going live.
