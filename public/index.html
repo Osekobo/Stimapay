@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>EasyTel USSD Test Console</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:1050px;margin:30px auto;padding:0 18px;background:#f5f7fb;color:#18202a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 4px 18px #0001}h1{margin-bottom:5px}input,button{padding:11px;border-radius:8px;border:1px solid #ccd3dd;margin:5px 0;width:100%;box-sizing:border-box}button{cursor:pointer;background:#18202a;color:#fff}.phone{font-size:16px}.screen{background:#101010;color:#8cff8c;padding:16px;border-radius:10px;min-height:190px;white-space:pre-wrap;font-family:monospace}.row{display:flex;gap:8px}.row>*{flex:1}table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #eee;text-align:left}.ok{padding:12px;background:#e9fff0;border-radius:8px;margin-top:10px}small{color:#65707d}.note{padding:12px;background:#eef4ff;border-radius:8px;margin:12px 0}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+<h1>EasyTel USSD Test Console</h1>
+<small>USSD-only demo for Africa's Talking Sandbox. No M-PESA/Daraja integration or API keys are used.</small>
+<div class="note">Africa's Talking will call <b>POST /ussd</b>. The server returns the required <b>CON</b> or <b>END</b> response for the feature-phone simulator.</div>
+<div class="grid" style="margin-top:18px">
+<section class="card"><h2>Local USSD Preview</h2><input id="phone" class="phone" value="254712345678" placeholder="Phone number">
+<div class="screen" id="screen">Dial the service to begin.</div>
+<div class="row"><button id="dial">Dial</button><button id="buy">Buy Bundle</button></div>
+<div class="row"><button id="onegb">1GB flow</button><button id="balance">Balance</button></div>
+<button id="last">Last Purchase</button>
+<input id="text" placeholder="USSD text e.g. 1*3*1"><button id="send">Send</button></section>
+<section class="card"><h2>Integration Checklist</h2>
+<ul><li>USSD callback: <code>/ussd</code></li><li>Method: <code>POST</code></li><li>Response: plain text beginning with <code>CON</code> or <code>END</code></li><li>Inputs handled: <code>sessionId</code>, <code>serviceCode</code>, <code>phoneNumber</code>, <code>text</code></li><li>No payment API or secret keys required</li></ul>
+<h3>Bundle catalogue</h3><div id="bundles">Loading…</div></section>
+</div>
+<section class="card" style="margin-top:18px"><h2>Demo Transactions</h2><div id="tx">Loading…</div></section>
+<script>
+const $=id=>document.getElementById(id);
+async function send(text){const r=await fetch('/api/ussd-test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phoneNumber:$('phone').value,serviceCode:'*123#',sessionId:'LOCAL-SESSION',text})});const x=await r.json();$('screen').textContent=x.response;$('text').value=text;load();}
+$('dial').addEventListener('click',()=>send(''));$('buy').addEventListener('click',()=>send('1'));$('onegb').addEventListener('click',()=>send('1*3*1'));$('balance').addEventListener('click',()=>send('2'));$('last').addEventListener('click',()=>send('3'));$('send').addEventListener('click',()=>send($('text').value));
+async function load(){const b=await(await fetch('/api/bundles')).json();$('bundles').innerHTML=b.map(x=>`<div>${x.id}. <b>${x.name}</b> — KSh ${x.price} — ${x.data_mb} MB</div>`).join('');const t=await(await fetch('/api/transactions')).json();$('tx').innerHTML=t.length?`<table><tr><th>Phone</th><th>Bundle</th><th>Amount</th><th>Receipt</th><th>Status</th></tr>${t.map(x=>`<tr><td>${x.phone}</td><td>${x.bundle}</td><td>KSh ${x.amount}</td><td>${x.receipt}</td><td>${x.status}</td></tr>`).join('')}</table>`:'No purchases yet.';}load();
+</script></body></html>
