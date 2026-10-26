@@ -4,3 +4,4 @@ stimapay.db
 stimapay.db-shm
 stimapay.db-wal
 *.log
+test
