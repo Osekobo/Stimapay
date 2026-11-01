@@ -1,7 +1,44 @@
+# Dependencies
 node_modules/
+venv/
+.venv/
+env/
+
+# Environment variables
 .env
-stimapay.db
-stimapay.db-shm
-stimapay.db-wal
+.env.*
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Databases
+*.db
+*.sqlite3
+*.db-shm
+*.db-wal
+
+# Logs & temp files
 *.log
+.pytest_cache/
 test
