@@ -35,9 +35,22 @@ def init_db():
                 checkout_request_id VARCHAR(100),
                 merchant_request_id VARCHAR(100),
                 mpesa_receipt VARCHAR(100),
+                token VARCHAR(50),
                 result_code VARCHAR(50),
                 result_desc TEXT,
                 status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+    )
+    conn.execute(
+        text("""
+            CREATE TABLE IF NOT EXISTS tickets (
+                id SERIAL PRIMARY KEY,
+                phone VARCHAR(20) NOT NULL,
+                meter_number VARCHAR(50) NOT NULL,
+                fault_type VARCHAR(100) NOT NULL,
+                status VARCHAR(20) NOT NULL DEFAULT 'OPEN',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
