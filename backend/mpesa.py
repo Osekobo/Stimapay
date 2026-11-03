@@ -93,7 +93,8 @@ def build_password(ts: str) -> str:
 
 
 def normalize_phone(raw: str) -> str:
-  p = "".join(filter(str.isdigit, str(raw or "")))
+  s = str(raw or "").strip().replace("+", "")
+  p = "".join(filter(str.isdigit, s))
   if p.startswith("254"):
     return p
   if p.startswith("0"):

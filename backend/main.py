@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 from database import get_db, init_db
 from mpesa import normalize_phone, stk_push, stk_query
+from sms import send_sms
 
 app = FastAPI(title="M-Paya Energy USSD", version="2.1.0")
 
@@ -224,7 +225,9 @@ async def ussd_handler(phone_number: str = "", text_input: str = "") -> str:
               " complete purchase."
           )
         except Exception as err:
-          print("STK push error:", err)
+          print(f"STK push error: {err}")
+          import traceback
+          traceback.print_exc()
           return "END Could not send M-Pesa prompt. Please try again later."
 
       return "END Invalid choice. Please try again."
@@ -360,7 +363,7 @@ def schedule_reconcile(payment_id: int, checkout_request_id: str):
     db = next(get_db())
     try:
       pay = db.execute(
-          text("SELECT id, status FROM payments WHERE id = :id"),
+          text("SELECT id, status, phone, meter_number, token, amount FROM payments WHERE id = :id"),
           {"id": payment_id},
       ).fetchone()
       if not pay or pay[1] != "PENDING":
@@ -401,6 +404,15 @@ def schedule_reconcile(payment_id: int, checkout_request_id: str):
       )
       db.commit()
       print(f"Reconcile: payment {payment_id} -> {status} ({reason})")
+
+      if status == "PAID":
+        phone, meter, token, amount = pay[2], pay[3], pay[4], pay[5]
+        msg = (
+            f"StimaPay: Payment of KSh {amount} received for Meter {meter}.\n"
+            f"Token: {token}\n"
+            f"Receipt: N/A"
+        )
+        send_sms(phone, msg)
     except Exception as e:
       print(f"Reconcile error for payment {payment_id}: {e}")
     finally:
@@ -466,6 +478,11 @@ async def mpesa_callback(request: Request):
               receipt = item.get("Value")
               break
 
+        old_pay = db.execute(
+            text("SELECT status, phone, meter_number, token, amount FROM payments WHERE id = :id"),
+            {"id": payment_id},
+        ).fetchone()
+
         db.execute(
             text(
                 """UPDATE payments
@@ -483,6 +500,15 @@ async def mpesa_callback(request: Request):
         )
         db.commit()
         print(f"Payment {payment_id} -> {status} ({reason})")
+
+        if old_pay and old_pay[0] == "PENDING" and status == "PAID":
+          phone, meter, token, amount = old_pay[1], old_pay[2], old_pay[3], old_pay[4]
+          msg = (
+              f"StimaPay: Payment of KSh {amount} received for Meter {meter}.\n"
+              f"Token: {token}\n"
+              f"Receipt: {receipt or 'N/A'}"
+          )
+          send_sms(phone, msg)
       else:
         print(
             "Callback for unknown CheckoutRequestID:"
